@@ -9,16 +9,23 @@ import math
 import argparse
 from torch.utils.data import DataLoader
 import wandb
+import random
+import numpy as np
+from pathlib import Path
+from dataset.audio_data import WavDataset
+import nnAudio.features
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default='cifar10')
+parser.add_argument('--audio_dir', type=str, default='data/audioset/all/')
+parser.add_argument('--dataset', type=str, default='audioset')
 parser.add_argument('--port', type=int, default=23456)
 parser.add_argument('--k', type=int, default=4096)
 parser.add_argument('--m', type=float, default=0.99)
 parser.add_argument('--weak', default=False, action='store_true')
 parser.add_argument('--epochs', type=int, default=800)
-parser.add_argument('--batch_size', type=int, default=256)
+parser.add_argument('--batch_size', type=int, default=2)
 parser.add_argument('--base_lr', type=float, default=0.06)
+parser.add_argument('--resume', type=bool, default=False)
 args = parser.parse_args()
 print(args)
 
@@ -39,6 +46,19 @@ def adjust_learning_rate(optimizer, epoch, base_lr, i, iteration_per_epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+to_spec = nnAudio.features.MelSpectrogram(
+    sr=16000,
+    n_fft=1024,
+    win_length=1024,
+    hop_length=160,
+    n_mels=64,
+    fmin=60,
+    fmax=7800,
+    center=True,
+    power=2,
+    verbose=False,
+)
+
 
 def train(train_loader, model, optimizer, epoch, iteration_per_epoch, base_lr):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -57,8 +77,15 @@ def train(train_loader, model, optimizer, epoch, iteration_per_epoch, base_lr):
         adjust_learning_rate(optimizer, epoch, base_lr, i, iteration_per_epoch)
         wandb.log({'lr': optimizer.param_groups[0]['lr']})
         data_time.update(time.time() - end)
+
+        # Raw audio to log-mel spectrograms
+        img1 = (to_spec(img1) + torch.finfo().eps).log().unsqueeze(1)
+        img2 = (to_spec(img2) + torch.finfo().eps).log().unsqueeze(1)
+
         img1 = img1.cuda(non_blocking=True)
         img2 = img2.cuda(non_blocking=True)
+
+        # TODO: PreNorm
 
         # compute output
         loss = model(img1, img2)
@@ -79,34 +106,46 @@ def train(train_loader, model, optimizer, epoch, iteration_per_epoch, base_lr):
 
         progress.display(i)
 
+def seed_everything(seed=42):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 def main():
     wandb.init(
-    project="ressl-cv",
+    project="ressl-audio",
     config=args,
 )
+    seed_everything()
 
-    model = ReSSL(dataset=args.dataset, K=args.k, m=args.m)
+    model = ReSSL(K=args.k, m=args.m)
     model = model.cuda()
+    print(model)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=5e-4)
-    torch.backends.cudnn.benchmark = True
 
-    if args.dataset == 'cifar10':
-        dataset = CIFAR10Pair(root='data', download=True, transform=get_contrastive_augment('cifar10'), weak_aug=get_weak_augment('cifar10'))
-    elif args.dataset == 'stl10':
-        dataset = STL10Pair(root='data', download=True, split='train+unlabeled', transform=get_contrastive_augment('stl10'), weak_aug=get_weak_augment('stl10'))
-    elif args.dataset == 'tinyimagenet':
-        dataset = TinyImagenetPair(root='data/tiny-imagenet-200/train', transform=get_contrastive_augment('tinyimagenet'), weak_aug=get_weak_augment('tinyimagenet'))
-    else:
-        dataset = CIFAR100Pair(root='data', download=True, transform=get_contrastive_augment('cifar100'), weak_aug=get_weak_augment('cifar100'))
+    # if args.dataset == 'cifar10':
+    #     dataset = CIFAR10Pair(root='data', download=True, transform=get_contrastive_augment('cifar10'), weak_aug=get_weak_augment('cifar10'))
+    # elif args.dataset == 'stl10':
+    #     dataset = STL10Pair(root='data', download=True, split='train+unlabeled', transform=get_contrastive_augment('stl10'), weak_aug=get_weak_augment('stl10'))
+    # elif args.dataset == 'tinyimagenet':
+    #     dataset = TinyImagenetPair(root='data/tiny-imagenet-200/train', transform=get_contrastive_augment('tinyimagenet'), weak_aug=get_weak_augment('tinyimagenet'))
+    # else:
+    #     dataset = CIFAR100Pair(root='data', download=True, transform=get_contrastive_augment('cifar100'), weak_aug=get_weak_augment('cifar100'))
 
+    files = sorted(Path(args.audio_dir).glob("*.wav"))
+    # TODO: Data transformations
+    dataset = WavDataset(16000, files, labels=None, tfms=None, random_crop=True)
     train_loader = DataLoader(dataset, shuffle=True, num_workers=6, pin_memory=True, batch_size=args.batch_size, drop_last=True)
     iteration_per_epoch = train_loader.__len__()
 
     checkpoint_path = 'checkpoints/ressl-{}.pth'.format(args.dataset)
     print('checkpoint_path:', checkpoint_path)
-    if os.path.exists(checkpoint_path):
+    if os.path.exists(checkpoint_path) and args.resume:
         checkpoint =  torch.load(checkpoint_path, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])

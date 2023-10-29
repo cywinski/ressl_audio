@@ -1,22 +1,25 @@
 import torch.nn as nn
 import torch
 from network.base_model import ModelBaseMoCo
+from network.audio_model import AudioNTT2022
 from network.head import MoCoHead
 import torch.nn.functional as F
 
 class ReSSL(nn.Module):
-    def __init__(self, dim=128, K=4096, m=0.99, dataset='cifar10', bn_splits=8):
+    def __init__(self, dim=128, K=4096, m=0.99, bn_splits=8):
         super(ReSSL, self).__init__()
 
         self.K = K
         self.m = m
 
         # create the encoders
-        self.net       = ModelBaseMoCo(dataset=dataset, bn_splits=bn_splits)
-        self.encoder_k = ModelBaseMoCo(dataset=dataset, bn_splits=bn_splits)
+        # self.net       = ModelBaseMoCo(bn_splits=bn_splits)
+        # self.encoder_k = ModelBaseMoCo(bn_splits=bn_splits)
+        self.net = AudioNTT2022(n_mels=64)
+        self.encoder_k = AudioNTT2022(n_mels=64)
 
-        self.head_q = MoCoHead(input_dim=512)
-        self.head_k = MoCoHead(input_dim=512)
+        self.head_q = MoCoHead(input_dim=3072)
+        self.head_k = MoCoHead(input_dim=3072)
 
         for param_q, param_k in zip(self.net.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
@@ -84,16 +87,16 @@ class ReSSL(nn.Module):
             im_k: a batch of key images
         Output:
             loss
-        """        
-
+        """
+        # TODO: Figure out normaliziing
         # update the key encoder
         with torch.no_grad():  # no gradient to keys
             self._momentum_update_key_encoder()
-        
+
         # compute query features
         q = self.net(im1)  # queries: NxC
         q = self.head_q(q)
-        q = nn.functional.normalize(q, dim=1)  # already normalized
+        # q = nn.functional.normalize(q, dim=1)  # already normalized
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
@@ -102,13 +105,12 @@ class ReSSL(nn.Module):
 
             k = self.encoder_k(im_k_)  # keys: NxC
             k = self.head_k(k)
-            k = nn.functional.normalize(k, dim=1)  # already normalized
+            # k = nn.functional.normalize(k, dim=1)  # already normalized
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
 
         logits_q = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
         logits_k = torch.einsum('nc,ck->nk', [k, self.queue.clone().detach()])
-        loss = - torch.sum(F.softmax(logits_k.detach() / 0.04, dim=1) * F.log_softmax(logits_q / 0.1, dim=1), dim=1).mean()
+        loss = - torch.sum(F.softmax(logits_k.detach() / 0.04, dim=1) * F.log_softmax(logits_q / 0.1, dim=1), dim=1).mean() # NOTE: Temperatures hardcoded
         self._dequeue_and_enqueue(k)
         return loss
-
