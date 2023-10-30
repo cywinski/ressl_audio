@@ -1,5 +1,7 @@
 from torch import nn
 import torch
+from audiomentations import Compose, AddGaussianNoise, TimeStretch, PitchShift, Shift
+
 
 class NormalizeBatch(nn.Module):
     """Normalization of Input Batch.
@@ -19,11 +21,14 @@ class NormalizeBatch(nn.Module):
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         _mean = X.mean(dim=self.axis, keepdims=True)
-        _std = torch.clamp(X.std(dim=self.axis, keepdims=True), torch.finfo().eps, torch.finfo().max)
-        return ((X - _mean) / _std)
+        _std = torch.clamp(
+            X.std(dim=self.axis, keepdims=True), torch.finfo().eps, torch.finfo().max
+        )
+        return (X - _mean) / _std
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(axis={self.axis})'
+        return f"{self.__class__.__name__}(axis={self.axis})"
+
 
 class PrecomputedNorm(nn.Module):
     """Normalization using Pre-computed Mean/Std.
@@ -41,7 +46,30 @@ class PrecomputedNorm(nn.Module):
         self.mean, self.std = stats
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return ((X - self.mean) / self.std)
+        return (X - self.mean) / self.std
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(mean={self.mean}, std={self.std}, axis={self.axis})'
+        return f"{self.__class__.__name__}(mean={self.mean}, std={self.std}, axis={self.axis})"
+
+# TODO: Change augmentations
+
+def get_contrastive_augment():
+    return Compose(
+        [
+            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+            TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
+            PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
+            Shift(p=0.5),
+        ]
+    )
+
+
+def get_weak_augment():
+    return Compose(
+        [
+            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+            TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
+            PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
+            Shift(p=0.5),
+        ]
+    )

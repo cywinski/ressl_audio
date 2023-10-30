@@ -4,7 +4,6 @@ from util.meter import *
 from network.ressl import ReSSL
 import time
 import os
-from dataset.data import *
 import math
 import argparse
 from torch.utils.data import DataLoader
@@ -12,25 +11,31 @@ import wandb
 import random
 import numpy as np
 from pathlib import Path
-from dataset.audio_data import WavDataset
+from dataset.audio_data import WavDatasetPair
+from dataset.audio_augmentations import (
+    get_contrastive_augment,
+    get_weak_augment,
+    PrecomputedNorm,
+)
 import nnAudio.features
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--audio_dir', type=str, default='data/audioset/all/')
-parser.add_argument('--dataset', type=str, default='audioset')
-parser.add_argument('--port', type=int, default=23456)
-parser.add_argument('--k', type=int, default=4096)
-parser.add_argument('--m', type=float, default=0.99)
-parser.add_argument('--weak', default=False, action='store_true')
-parser.add_argument('--epochs', type=int, default=800)
-parser.add_argument('--batch_size', type=int, default=2)
-parser.add_argument('--base_lr', type=float, default=0.06)
-parser.add_argument('--resume', type=bool, default=False)
+parser.add_argument("--audio_dir", type=str, default="data/audioset/all/")
+parser.add_argument("--dataset", type=str, default="audioset")
+parser.add_argument("--port", type=int, default=23456)
+parser.add_argument("--k", type=int, default=4096)
+parser.add_argument("--m", type=float, default=0.99)
+parser.add_argument("--weak", default=False, action="store_true")
+parser.add_argument("--epochs", type=int, default=800)
+parser.add_argument("--batch_size", type=int, default=2)
+parser.add_argument("--base_lr", type=float, default=0.06)
+parser.add_argument("--resume", type=bool, default=False)
 args = parser.parse_args()
 print(args)
 
 epochs = args.epochs
 warm_up = 5
+
 
 def adjust_learning_rate(optimizer, epoch, base_lr, i, iteration_per_epoch):
     T = epoch * iteration_per_epoch + i
@@ -44,7 +49,8 @@ def adjust_learning_rate(optimizer, epoch, base_lr, i, iteration_per_epoch):
         lr = 0.5 * base_lr * (1 + math.cos(1.0 * T / total_iters * math.pi))
 
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+        param_group["lr"] = lr
+
 
 to_spec = nnAudio.features.MelSpectrogram(
     sr=16000,
@@ -60,36 +66,66 @@ to_spec = nnAudio.features.MelSpectrogram(
 )
 
 
-def train(train_loader, model, optimizer, epoch, iteration_per_epoch, base_lr):
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time = AverageMeter('Data', ':6.3f')
-    ce_losses = AverageMeter('CE', ':.4e')
+def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
+    # Calculate normalization statistics from the training dataset.
+    n_stats = min(n_stats, len(data_loader.dataset))
+    print(
+        f"Calculating mean/std using random {n_stats} samples from population {len(data_loader.dataset)} samples..."
+    )
+    to_spec.to(device)
+    X = []
+    for wavs in data_loader:
+        lms_batch = (to_spec(wavs.to(device)) + torch.finfo().eps).log().unsqueeze(1)
+        X.extend([x for x in lms_batch.detach().cpu().numpy()])
+        if len(X) >= n_stats:
+            break
+    X = np.stack(X)
+    norm_stats = np.array([X.mean(), X.std()])
+    print(f"  ==> mean/std: {norm_stats}, {norm_stats.shape} <- {X.shape}")
+    return norm_stats
+
+
+def train(
+    train_loader,
+    model,
+    optimizer,
+    epoch,
+    iteration_per_epoch,
+    base_lr,
+    pre_norm,
+    contrastive_augment,
+    weak_augment,
+):
+    batch_time = AverageMeter("Time", ":6.3f")
+    data_time = AverageMeter("Data", ":6.3f")
+    ce_losses = AverageMeter("CE", ":.4e")
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, ce_losses],
-        prefix="Epoch: [{}]".format(epoch))
+        prefix="Epoch: [{}]".format(epoch),
+    )
 
     # switch to train mode
     model.train()
 
     end = time.time()
-    for i, (img1, img2) in enumerate(train_loader):
+    for i, (wav1, wav2) in enumerate(train_loader):
         adjust_learning_rate(optimizer, epoch, base_lr, i, iteration_per_epoch)
-        wandb.log({'lr': optimizer.param_groups[0]['lr']})
+        wandb.log({"lr": optimizer.param_groups[0]["lr"]})
         data_time.update(time.time() - end)
 
         # Raw audio to log-mel spectrograms
-        img1 = (to_spec(img1) + torch.finfo().eps).log().unsqueeze(1)
-        img2 = (to_spec(img2) + torch.finfo().eps).log().unsqueeze(1)
+        img1 = (to_spec(wav1) + torch.finfo().eps).log().unsqueeze(1)
+        img2 = (to_spec(wav2) + torch.finfo().eps).log().unsqueeze(1)
+
+        # TODO: Pre normalize
 
         img1 = img1.cuda(non_blocking=True)
         img2 = img2.cuda(non_blocking=True)
 
-        # TODO: PreNorm
-
         # compute output
         loss = model(img1, img2)
-        wandb.log({'loss': loss.item()})
+        wandb.log({"loss": loss.item()})
 
         # acc1/acc5 are (K+1)-way contrast classifier accuracy
         # measure accuracy and record loss
@@ -106,9 +142,10 @@ def train(train_loader, model, optimizer, epoch, iteration_per_epoch, base_lr):
 
         progress.display(i)
 
+
 def seed_everything(seed=42):
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
@@ -117,54 +154,77 @@ def seed_everything(seed=42):
 
 def main():
     wandb.init(
-    project="ressl-audio",
-    config=args,
-)
+        project="ressl-audio",
+        config=args,
+    )
     seed_everything()
 
     model = ReSSL(K=args.k, m=args.m)
     model = model.cuda()
     print(model)
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=5e-4)
-
-    # if args.dataset == 'cifar10':
-    #     dataset = CIFAR10Pair(root='data', download=True, transform=get_contrastive_augment('cifar10'), weak_aug=get_weak_augment('cifar10'))
-    # elif args.dataset == 'stl10':
-    #     dataset = STL10Pair(root='data', download=True, split='train+unlabeled', transform=get_contrastive_augment('stl10'), weak_aug=get_weak_augment('stl10'))
-    # elif args.dataset == 'tinyimagenet':
-    #     dataset = TinyImagenetPair(root='data/tiny-imagenet-200/train', transform=get_contrastive_augment('tinyimagenet'), weak_aug=get_weak_augment('tinyimagenet'))
-    # else:
-    #     dataset = CIFAR100Pair(root='data', download=True, transform=get_contrastive_augment('cifar100'), weak_aug=get_weak_augment('cifar100'))
+    optimizer = torch.optim.SGD(
+        model.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=5e-4
+    )
 
     files = sorted(Path(args.audio_dir).glob("*.wav"))
-    # TODO: Data transformations
-    dataset = WavDataset(16000, files, labels=None, tfms=None, random_crop=True)
-    train_loader = DataLoader(dataset, shuffle=True, num_workers=6, pin_memory=True, batch_size=args.batch_size, drop_last=True)
+
+    contrastive_augment = get_contrastive_augment()
+    weak_augment = get_weak_augment()
+    dataset = WavDatasetPair(
+        sample_rate=16000,
+        audio_files=files,
+        labels=None,
+        random_crop=True,
+        contrastive_aug=contrastive_augment,
+        weak_aug=weak_augment,
+    )
+    train_loader = DataLoader(
+        dataset,
+        shuffle=True,
+        num_workers=6,
+        pin_memory=False,
+        batch_size=args.batch_size,
+        drop_last=True,
+    )
     iteration_per_epoch = train_loader.__len__()
 
-    checkpoint_path = 'checkpoints/ressl-{}.pth'.format(args.dataset)
-    print('checkpoint_path:', checkpoint_path)
+    checkpoint_path = "checkpoints/ressl-{}.pth".format(args.dataset)
+    print("checkpoint_path:", checkpoint_path)
     if os.path.exists(checkpoint_path) and args.resume:
-        checkpoint =  torch.load(checkpoint_path, map_location='cpu')
-        model.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        start_epoch = checkpoint['epoch']
-        print(checkpoint_path, 'found, start from epoch', start_epoch)
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        model.load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        start_epoch = checkpoint["epoch"]
+        print(checkpoint_path, "found, start from epoch", start_epoch)
     else:
         start_epoch = 0
-        print(checkpoint_path, 'not found, start from epoch 0')
+        print(checkpoint_path, "not found, start from epoch 0")
 
+    # pre_norm = PrecomputedNorm(calc_norm_stats(train_loader))
+    pre_norm = None
 
     model.train()
     for epoch in range(start_epoch, epochs):
-        train(train_loader, model, optimizer, epoch, iteration_per_epoch, args.base_lr)
+        train(
+            train_loader,
+            model,
+            optimizer,
+            epoch,
+            iteration_per_epoch,
+            args.base_lr,
+            pre_norm,
+            contrastive_augment,
+            weak_augment,
+        )
         torch.save(
-        {
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'epoch': epoch + 1
-        }, checkpoint_path)
+            {
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": epoch + 1,
+            },
+            checkpoint_path,
+        )
 
 
 if __name__ == "__main__":

@@ -96,7 +96,7 @@ class ReSSL(nn.Module):
         # compute query features
         q = self.net(im1)  # queries: NxC
         q = self.head_q(q)
-        # q = nn.functional.normalize(q, dim=1)  # already normalized
+        q = nn.functional.normalize(q, dim=1)  # already normalized
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
@@ -105,7 +105,7 @@ class ReSSL(nn.Module):
 
             k = self.encoder_k(im_k_)  # keys: NxC
             k = self.head_k(k)
-            # k = nn.functional.normalize(k, dim=1)  # already normalized
+            k = nn.functional.normalize(k, dim=1)  # already normalized
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
 
