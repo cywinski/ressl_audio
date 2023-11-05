@@ -34,8 +34,7 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
             start = np.random.randint(l - unit_samples) if self.random_crop else 0
             wav = wav[start : start + unit_samples]
         elif l < unit_samples:
-            wav = np.pad(wav, (0, unit_samples - l), mode="constant", value=0)
-
+            wav = np.pad(wav, (0, unit_samples - l), mode="constant", constant_values=0)
 
         if self.contrastive_aug is not None:
             pos_1 = self.contrastive_aug(wav, sample_rate=self.sample_rate)
@@ -47,7 +46,7 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
 
         # Return item
         label = self.get_label(index)
-        return (wav, wav) if label is None else (pos_1, label, pos_2, label)
+        return (pos_1, pos_2) if label is None else (pos_1, label, pos_2, label)
 
 
 class WavDatasetPair(BaseRawAudioDataset):

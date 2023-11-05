@@ -27,7 +27,7 @@ parser.add_argument("--k", type=int, default=4096)
 parser.add_argument("--m", type=float, default=0.99)
 parser.add_argument("--weak", default=False, action="store_true")
 parser.add_argument("--epochs", type=int, default=800)
-parser.add_argument("--batch_size", type=int, default=2)
+parser.add_argument("--batch_size", type=int, default=256)
 parser.add_argument("--base_lr", type=float, default=0.06)
 parser.add_argument("--resume", type=bool, default=False)
 args = parser.parse_args()
@@ -75,10 +75,11 @@ def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
     to_spec.to(device)
     X = []
     for wavs in data_loader:
-        lms_batch = (to_spec(wavs.to(device)) + torch.finfo().eps).log().unsqueeze(1)
-        X.extend([x for x in lms_batch.detach().cpu().numpy()])
-        if len(X) >= n_stats:
-            break
+        for wav in wavs:
+            lms_batch = (to_spec(wav.to(device)) + torch.finfo().eps).log().unsqueeze(1)
+            X.extend([x for x in lms_batch.detach().cpu().numpy()])
+            if len(X) >= n_stats:
+                break
     X = np.stack(X)
     norm_stats = np.array([X.mean(), X.std()])
     print(f"  ==> mean/std: {norm_stats}, {norm_stats.shape} <- {X.shape}")
@@ -93,8 +94,6 @@ def train(
     iteration_per_epoch,
     base_lr,
     pre_norm,
-    contrastive_augment,
-    weak_augment,
 ):
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
@@ -118,7 +117,9 @@ def train(
         img1 = (to_spec(wav1) + torch.finfo().eps).log().unsqueeze(1)
         img2 = (to_spec(wav2) + torch.finfo().eps).log().unsqueeze(1)
 
-        # TODO: Pre normalize
+        if pre_norm is not None:
+            img1 = pre_norm(img1)
+            img2 = pre_norm(img2)
 
         img1 = img1.cuda(non_blocking=True)
         img2 = img2.cuda(non_blocking=True)
@@ -150,6 +151,9 @@ def seed_everything(seed=42):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    return generator
 
 
 def main():
@@ -157,7 +161,7 @@ def main():
         project="ressl-audio",
         config=args,
     )
-    seed_everything()
+    generator = seed_everything()
 
     model = ReSSL(K=args.k, m=args.m)
     model = model.cuda()
@@ -169,23 +173,22 @@ def main():
 
     files = sorted(Path(args.audio_dir).glob("*.wav"))
 
-    contrastive_augment = get_contrastive_augment()
-    weak_augment = get_weak_augment()
     dataset = WavDatasetPair(
         sample_rate=16000,
         audio_files=files,
         labels=None,
         random_crop=True,
-        contrastive_aug=contrastive_augment,
-        weak_aug=weak_augment,
+        contrastive_aug=get_contrastive_augment(),
+        weak_aug=get_weak_augment(),
     )
     train_loader = DataLoader(
         dataset,
         shuffle=True,
-        num_workers=6,
+        num_workers=24,
         pin_memory=False,
         batch_size=args.batch_size,
         drop_last=True,
+        generator=generator,
     )
     iteration_per_epoch = train_loader.__len__()
 
@@ -214,8 +217,6 @@ def main():
             iteration_per_epoch,
             args.base_lr,
             pre_norm,
-            contrastive_augment,
-            weak_augment,
         )
         torch.save(
             {

@@ -5,6 +5,7 @@ from network.audio_model import AudioNTT2022
 from network.head import MoCoHead
 import torch.nn.functional as F
 
+
 class ReSSL(nn.Module):
     def __init__(self, dim=128, K=4096, m=0.99, bn_splits=8):
         super(ReSSL, self).__init__()
@@ -41,11 +42,10 @@ class ReSSL(nn.Module):
         Momentum update of the key encoder
         """
         for param_q, param_k in zip(self.net.parameters(), self.encoder_k.parameters()):
-            param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
+            param_k.data = param_k.data * self.m + param_q.data * (1.0 - self.m)
 
         for param_q, param_k in zip(self.head_q.parameters(), self.head_k.parameters()):
-            param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
-
+            param_k.data = param_k.data * self.m + param_q.data * (1.0 - self.m)
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self, keys):
@@ -55,7 +55,7 @@ class ReSSL(nn.Module):
         assert self.K % batch_size == 0  # for simplicity
 
         # replace the keys at ptr (dequeue and enqueue)
-        self.queue[:, ptr:ptr + batch_size] = keys.t()  # transpose
+        self.queue[:, ptr : ptr + batch_size] = keys.t()  # transpose
         ptr = (ptr + batch_size) % self.K  # move pointer
 
         self.queue_ptr[0] = ptr
@@ -109,8 +109,12 @@ class ReSSL(nn.Module):
             # undo shuffle
             k = self._batch_unshuffle_single_gpu(k, idx_unshuffle)
 
-        logits_q = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
-        logits_k = torch.einsum('nc,ck->nk', [k, self.queue.clone().detach()])
-        loss = - torch.sum(F.softmax(logits_k.detach() / 0.04, dim=1) * F.log_softmax(logits_q / 0.1, dim=1), dim=1).mean() # NOTE: Temperatures hardcoded
+        logits_q = torch.einsum("nc,ck->nk", [q, self.queue.clone().detach()])
+        logits_k = torch.einsum("nc,ck->nk", [k, self.queue.clone().detach()])
+        loss = -torch.sum(
+            F.softmax(logits_k.detach() / 0.04, dim=1)
+            * F.log_softmax(logits_q / 0.1, dim=1),
+            dim=1,
+        ).mean()  # NOTE: Temperatures hardcoded
         self._dequeue_and_enqueue(k)
         return loss
