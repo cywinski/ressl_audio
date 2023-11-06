@@ -184,7 +184,7 @@ def main():
     train_loader = DataLoader(
         dataset,
         shuffle=True,
-        num_workers=24,
+        num_workers=0,
         pin_memory=False,
         batch_size=args.batch_size,
         drop_last=True,
