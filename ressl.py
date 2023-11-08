@@ -192,7 +192,7 @@ def main():
     )
     iteration_per_epoch = train_loader.__len__()
 
-    checkpoint_path = "checkpoints/ressl-{}.pth".format(args.dataset)
+    checkpoint_path = "checkpoints/ressl-{}-epochs-{}-bs-{}.pth".format(args.dataset, args.epochs, args.batch_size)
     print("checkpoint_path:", checkpoint_path)
     if os.path.exists(checkpoint_path) and args.resume:
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
