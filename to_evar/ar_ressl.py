@@ -26,12 +26,11 @@ class AR_RESSL(BaseAudioRepr):
             # load_pretrained_weights(self.body, cfg.weight_file, model_key='body')
 
     def precompute(self, device, data_loader):
-        # self.norm_stats = calculate_norm_stats(device, data_loader, self.to_feature)
-        pass
+        self.norm_stats = calculate_norm_stats(device, data_loader, self.to_feature)
 
     def encode_frames(self, batch_audio):
         x = self.to_feature(batch_audio)
-        # x = normalize_spectrogram(self.norm_stats, x) # B,F,T
+        x = normalize_spectrogram(self.norm_stats, x) # B,F,T
         x = self.augment_if_training(x)
         x = x.unsqueeze(1)    # -> B,1,F,T
         x = self.body(x)      # -> B,T,D=C*F

@@ -12,14 +12,12 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
         random_crop=False,
         contrastive_aug=None,
         weak_aug=None,
-        pre_norm=None,
     ):
         self.sample_rate = sample_rate
         self.unit_samples = int(sample_rate * 0.95)
         self.random_crop = random_crop
         self.contrastive_aug = contrastive_aug
         self.weak_aug = weak_aug
-        self.pre_norm = pre_norm
 
     def __len__(self):
         raise NotImplementedError("implement me")
@@ -53,11 +51,7 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
             pos_1 = torch.from_numpy(wav).float()
             pos_2 = torch.from_numpy(wav).float()
 
-        if self.pre_norm:
-            pos_1 = self.pre_norm(pos_1)
-            pos_2 = self.pre_norm(pos_2)
-
-        # Return item
+        # Return pair of waveforms
         label = self.get_label(index)
         return (pos_1, pos_2) if label is None else (pos_1, label, pos_2, label)
 
@@ -71,14 +65,12 @@ class WavDatasetPair(BaseRawAudioDataset):
         random_crop=False,
         contrastive_aug=None,
         weak_aug=None,
-        pre_norm=None,
     ):
         super().__init__(
             sample_rate=sample_rate,
             random_crop=random_crop,
             contrastive_aug=contrastive_aug,
             weak_aug=weak_aug,
-            pre_norm=pre_norm,
         )
         self.files = audio_files
         self.labels = labels

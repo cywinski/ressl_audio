@@ -69,7 +69,7 @@ to_spec = nnAudio.features.MelSpectrogram(
 
 
 def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
-    # Calculate normalization statistics from the training dataset.
+    # Calculate normalization statistics from the training dataset (spectrograms).
     n_stats = min(n_stats, len(data_loader.dataset))
     print(
         f"Calculating mean/std using random {n_stats} samples from population {len(data_loader.dataset)} samples..."
@@ -117,6 +117,10 @@ def train(
         # Raw audio to log-mel spectrograms
         img1 = (to_spec(wav1) + torch.finfo().eps).log().unsqueeze(1)
         img2 = (to_spec(wav2) + torch.finfo().eps).log().unsqueeze(1)
+
+        if pre_norm is not None:
+            img1 = pre_norm(img1)
+            img2 = pre_norm(img2)
 
         img1 = img1.cuda(non_blocking=True)
         img2 = img2.cuda(non_blocking=True)
@@ -197,7 +201,6 @@ def main():
         random_crop=True,
         contrastive_aug=get_contrastive_augment(),
         weak_aug=get_weak_augment(),
-        pre_norm=pre_norm,
     )
     train_loader = DataLoader(
         dataset,
