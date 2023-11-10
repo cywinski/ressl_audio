@@ -88,7 +88,6 @@ class ReSSL(nn.Module):
         Output:
             loss
         """
-        # TODO: Figure out normaliziing
         # update the key encoder
         with torch.no_grad():  # no gradient to keys
             self._momentum_update_key_encoder()

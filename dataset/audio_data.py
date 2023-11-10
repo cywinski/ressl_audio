@@ -42,9 +42,6 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
         elif l < unit_samples:
             wav = np.pad(wav, (0, unit_samples - l), mode="constant", constant_values=0)
 
-        if self.pre_norm is not None:
-            wav = self.pre_norm(wav)
-
         if self.contrastive_aug is not None:
             pos_1 = self.contrastive_aug(wav, sample_rate=self.sample_rate)
 
@@ -55,6 +52,10 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
         else:
             pos_1 = torch.from_numpy(wav).float()
             pos_2 = torch.from_numpy(wav).float()
+
+        if self.pre_norm:
+            pos_1 = self.pre_norm(pos_1)
+            pos_2 = self.pre_norm(pos_2)
 
         # Return item
         label = self.get_label(index)
