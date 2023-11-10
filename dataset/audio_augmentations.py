@@ -1,6 +1,16 @@
 from torch import nn
 import torch
-from audiomentations import Compose, AddGaussianNoise, TimeStretch, PitchShift, Shift
+from audiomentations import (
+    Compose,
+    AddGaussianNoise,
+    TimeStretch,
+    PitchShift,
+    Shift,
+    AddGaussianSNR,
+    Gain,
+    Reverse,
+    RoomSimulator,
+)
 
 
 class NormalizeBatch(nn.Module):
@@ -51,15 +61,19 @@ class PrecomputedNorm(nn.Module):
     def __repr__(self):
         return f"{self.__class__.__name__}(mean={self.mean}, std={self.std}, axis={self.axis})"
 
-# TODO: Change augmentations
 
 def get_contrastive_augment():
     return Compose(
         [
-            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+            # AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+            AddGaussianSNR(min_snr_db=5.0, max_snr_db=20.0, p=1.0),
+            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=1.0),
             TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
             PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
             Shift(p=0.5),
+            Gain(min_gain_in_db=-12, max_gain_in_db=12, p=0.5),
+            # Reverse(p=0.5),
+            # RoomSimulator()
         ]
     )
 
@@ -67,7 +81,8 @@ def get_contrastive_augment():
 def get_weak_augment():
     return Compose(
         [
-            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=1.0),
+            # Reverse(p=0.5),
             # TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
             # PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
             # Shift(p=0.5),

@@ -30,6 +30,8 @@ parser.add_argument("--epochs", type=int, default=800)
 parser.add_argument("--batch_size", type=int, default=256)
 parser.add_argument("--base_lr", type=float, default=0.06)
 parser.add_argument("--resume", type=bool, default=False)
+parser.add_argument("--run_name", type=str, default="run")
+parser.add_argument("--prenormalize", type=bool, default=False)
 args = parser.parse_args()
 print(args)
 
@@ -72,11 +74,10 @@ def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
     print(
         f"Calculating mean/std using random {n_stats} samples from population {len(data_loader.dataset)} samples..."
     )
-    to_spec.to(device)
     X = []
     for wavs in data_loader:
         for wav in wavs:
-            lms_batch = (to_spec(wav.to(device)) + torch.finfo().eps).log().unsqueeze(1)
+            lms_batch = (to_spec(wav) + torch.finfo().eps).log().unsqueeze(1)
             X.extend([x for x in lms_batch.detach().cpu().numpy()])
             if len(X) >= n_stats:
                 break
@@ -117,10 +118,6 @@ def train(
         img1 = (to_spec(wav1) + torch.finfo().eps).log().unsqueeze(1)
         img2 = (to_spec(wav2) + torch.finfo().eps).log().unsqueeze(1)
 
-        if pre_norm is not None:
-            img1 = pre_norm(img1)
-            img2 = pre_norm(img2)
-
         img1 = img1.cuda(non_blocking=True)
         img2 = img2.cuda(non_blocking=True)
 
@@ -157,10 +154,7 @@ def seed_everything(seed=42):
 
 
 def main():
-    wandb.init(
-        project="ressl-audio",
-        config=args,
-    )
+    wandb.init(project="ressl-audio", config=args, name=args.run_name)
     generator = seed_everything()
 
     model = ReSSL(K=args.k, m=args.m)
@@ -173,6 +167,29 @@ def main():
 
     files = sorted(Path(args.audio_dir).glob("*.wav"))
 
+    if args.prenormalize:
+        # NOTE: No augmentations applied!
+        dataset_no_aug = WavDatasetPair(
+            sample_rate=16000,
+            audio_files=files,
+            labels=None,
+            random_crop=True,
+            contrastive_aug=None,
+            weak_aug=None,
+        )
+        train_loader_no_aug = DataLoader(
+            dataset_no_aug,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=False,
+            batch_size=args.batch_size,
+            drop_last=True,
+            generator=generator,
+        )
+        pre_norm = PrecomputedNorm(calc_norm_stats(train_loader_no_aug))
+    else:
+        pre_norm = None
+
     dataset = WavDatasetPair(
         sample_rate=16000,
         audio_files=files,
@@ -180,6 +197,7 @@ def main():
         random_crop=True,
         contrastive_aug=get_contrastive_augment(),
         weak_aug=get_weak_augment(),
+        pre_norm=pre_norm,
     )
     train_loader = DataLoader(
         dataset,
@@ -192,7 +210,9 @@ def main():
     )
     iteration_per_epoch = train_loader.__len__()
 
-    checkpoint_path = "checkpoints/ressl-{}-epochs-{}-bs-{}.pth".format(args.dataset, args.epochs, args.batch_size)
+    checkpoint_path = "checkpoints/ressl-{}-epochs-{}-bs-{}-{}.pth".format(
+        args.dataset, args.epochs, args.batch_size, args.run_name
+    )
     print("checkpoint_path:", checkpoint_path)
     if os.path.exists(checkpoint_path) and args.resume:
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
@@ -203,9 +223,6 @@ def main():
     else:
         start_epoch = 0
         print(checkpoint_path, "not found, start from epoch 0")
-
-    # pre_norm = PrecomputedNorm(calc_norm_stats(train_loader))
-    pre_norm = None
 
     model.train()
     for epoch in range(start_epoch, epochs):

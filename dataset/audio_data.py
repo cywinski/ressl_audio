@@ -7,13 +7,19 @@ import librosa
 
 class BaseRawAudioDataset(torch.utils.data.Dataset):
     def __init__(
-        self, sample_rate=16000, random_crop=False, contrastive_aug=None, weak_aug=None
+        self,
+        sample_rate=16000,
+        random_crop=False,
+        contrastive_aug=None,
+        weak_aug=None,
+        pre_norm=None,
     ):
         self.sample_rate = sample_rate
         self.unit_samples = int(sample_rate * 0.95)
         self.random_crop = random_crop
         self.contrastive_aug = contrastive_aug
         self.weak_aug = weak_aug
+        self.pre_norm = pre_norm
 
     def __len__(self):
         raise NotImplementedError("implement me")
@@ -36,6 +42,9 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
         elif l < unit_samples:
             wav = np.pad(wav, (0, unit_samples - l), mode="constant", constant_values=0)
 
+        if self.pre_norm is not None:
+            wav = self.pre_norm(wav)
+
         if self.contrastive_aug is not None:
             pos_1 = self.contrastive_aug(wav, sample_rate=self.sample_rate)
 
@@ -43,6 +52,9 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
                 pos_2 = self.weak_aug(wav, sample_rate=self.sample_rate)
             else:
                 pos_2 = self.contrastive_aug(wav, sample_rate=self.sample_rate)
+        else:
+            pos_1 = torch.from_numpy(wav).float()
+            pos_2 = torch.from_numpy(wav).float()
 
         # Return item
         label = self.get_label(index)
@@ -58,12 +70,14 @@ class WavDatasetPair(BaseRawAudioDataset):
         random_crop=False,
         contrastive_aug=None,
         weak_aug=None,
+        pre_norm=None,
     ):
         super().__init__(
             sample_rate=sample_rate,
             random_crop=random_crop,
             contrastive_aug=contrastive_aug,
             weak_aug=weak_aug,
+            pre_norm=pre_norm,
         )
         self.files = audio_files
         self.labels = labels
