@@ -66,7 +66,7 @@ def get_contrastive_augment():
     return Compose(
         [
             # AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
-            AddGaussianSNR(min_snr_db=5.0, max_snr_db=20.0, p=1.0),
+            # AddGaussianSNR(min_snr_db=5.0, max_snr_db=20.0, p=1.0),
             AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=1.0),
             TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
             PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
