@@ -234,7 +234,7 @@ def main():
     train_loader = DataLoader(
         dataset,
         shuffle=True,
-        num_workers=0,
+        num_workers=0, # TODO: Try to fix this
         pin_memory=False,
         batch_size=args.batch_size,
         drop_last=True,
