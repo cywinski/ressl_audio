@@ -314,11 +314,8 @@ if __name__ == "__main__":
     )
     study.optimize(objective, n_trials=len(aug_combinations), timeout=600)
 
-    complete_trials = study.get_trials(deepcopy=False, states=[optuna.TrialState.COMPLETE])
-
     print("Study statistics: ")
     print("  Number of finished trials: ", len(study.trials))
-    print("  Number of complete trials: ", len(complete_trials))
 
     print("Best trial:")
     trial = study.best_trial
