@@ -76,7 +76,7 @@ to_spec = nnAudio.features.MelSpectrogram(
 post_norm = NormalizeBatch()
 AVAILABLE_AUGMENTATIONS = [
     "AddGaussianNoise",
-    "TimeStretch",
+    # "TimeStretch",
     "PitchShift",
     # # "Shift",
     "HighPassFilter",
@@ -188,8 +188,8 @@ def train(
         batch_time.update(time.time() - end)
         end = time.time()
 
-        # if i % iteration_per_epoch == 0:
-        progress.display(i)
+        if i % iteration_per_epoch == 0:
+            progress.display(i)
 
     return loss.item()
 
@@ -231,6 +231,7 @@ if args.prenormalize:
     pre_norm = PrecomputedNorm(calc_norm_stats(train_loader_no_aug))
 else:
     pre_norm = None
+
 
 def objective(trial):
     run = wandb.init(project="ressl-audio", config=args, group=args.run_name)
@@ -305,13 +306,16 @@ def objective(trial):
             },
             checkpoint_path,
         )
+    wandb.finish()
     return loss_val
 
 
 if __name__ == "__main__":
     search_space = {"augmentations": aug_combinations}
-    study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=len(aug_combinations), timeout=600)
+    study = optuna.create_study(
+        direction="minimize", sampler=optuna.samplers.GridSampler(search_space)
+    )
+    study.optimize(objective, n_trials=len(aug_combinations))
 
     print("Study statistics: ")
     print("  Number of finished trials: ", len(study.trials))
