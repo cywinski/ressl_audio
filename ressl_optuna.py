@@ -76,11 +76,12 @@ to_spec = nnAudio.features.MelSpectrogram(
 post_norm = NormalizeBatch()
 AVAILABLE_AUGMENTATIONS = [
     "AddGaussianNoise",
-    "AddGaussianSNR",
     "TimeStretch",
     "PitchShift",
-    "Shift",
-    "Gain",
+    # # "Shift",
+    "HighPassFilter",
+    "LowPassFilter",
+    # "PolarityInversion",
 ]
 aug_combinations = []
 for r in range(1, len(AVAILABLE_AUGMENTATIONS) + 1):
@@ -187,8 +188,8 @@ def train(
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % iteration_per_epoch == 0:
-            progress.display(i)
+        # if i % iteration_per_epoch == 0:
+        progress.display(i)
 
     return loss.item()
 
@@ -262,7 +263,7 @@ def objective(trial):
     train_loader = DataLoader(
         dataset,
         shuffle=True,
-        num_workers=8,
+        num_workers=0,
         pin_memory=False,
         batch_size=args.batch_size,
         drop_last=True,
@@ -309,9 +310,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     search_space = {"augmentations": aug_combinations}
-    study = optuna.create_study(
-        direction="minimize"
-    )
+    study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=len(aug_combinations), timeout=600)
 
     print("Study statistics: ")

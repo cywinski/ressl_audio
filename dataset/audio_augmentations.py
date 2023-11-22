@@ -1,16 +1,5 @@
 from torch import nn
 import torch
-from audiomentations import (
-    Compose,
-    AddGaussianNoise,
-    TimeStretch,
-    PitchShift,
-    Shift,
-    AddGaussianSNR,
-    Gain,
-    Reverse,
-    RoomSimulator,
-)
 import audiomentations
 
 
@@ -64,32 +53,33 @@ class PrecomputedNorm(nn.Module):
 
 
 def get_contrastive_augment():
-    return Compose(
+    return audiomentations.Compose(
         [
-            # AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
-            # AddGaussianSNR(min_snr_db=5.0, max_snr_db=20.0, p=1.0),
-            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=1.0),
-            TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
-            PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
-            Shift(p=0.5),
-            Gain(min_gain_in_db=-12, max_gain_in_db=12, p=0.5),
-            # Reverse(p=0.5),
-            # RoomSimulator()
+            audiomentations.PolarityInversion(),
+            audiomentations.HighPassFilter(),
+            audiomentations.LowPassFilter(),
+            audiomentations.AddGaussianNoise(),
+            audiomentations.TimeStretch(),
+            audiomentations.PitchShift(),
+            audiomentations.Shift(),
+            audiomentations.Normalize(),
         ]
     )
 
 
 def get_weak_augment():
-    return Compose(
+    return audiomentations.Compose(
         [
-            AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=1.0),
-            # Reverse(p=0.5),
-            # TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
-            # PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
-            # Shift(p=0.5),
+            audiomentations.PolarityInversion(),
+            audiomentations.AddGaussianNoise(),
+            audiomentations.PitchShift(),
+            audiomentations.Normalize(),
         ]
     )
 
+
 def get_augment_by_class_names(aug_classes_list):
-    aug_list = [getattr(audiomentations, aug_class)() for aug_class in eval(aug_classes_list)]
-    return Compose(aug_list)
+    aug_list = [
+        getattr(audiomentations, aug_class)() for aug_class in eval(aug_classes_list)
+    ] + [audiomentations.Normalize()]
+    return audiomentations.Compose(aug_list)

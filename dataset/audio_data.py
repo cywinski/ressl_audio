@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torchaudio
 import librosa
 
 
@@ -47,6 +46,9 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
                 pos_2 = self.weak_aug(wav, sample_rate=self.sample_rate)
             else:
                 pos_2 = self.contrastive_aug(wav, sample_rate=self.sample_rate)
+
+            pos_1 = torch.from_numpy(pos_1).float()
+            pos_2 = torch.from_numpy(pos_2).float()
         else:
             pos_1 = torch.from_numpy(wav).float()
             pos_2 = torch.from_numpy(wav).float()
