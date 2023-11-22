@@ -11,6 +11,7 @@ from audiomentations import (
     Reverse,
     RoomSimulator,
 )
+import audiomentations
 
 
 class NormalizeBatch(nn.Module):
@@ -88,3 +89,7 @@ def get_weak_augment():
             # Shift(p=0.5),
         ]
     )
+
+def get_augment_by_class_names(aug_classes_list):
+    aug_list = [getattr(audiomentations, aug_class)() for aug_class in eval(aug_classes_list)]
+    return Compose(aug_list)
