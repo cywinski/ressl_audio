@@ -75,8 +75,8 @@ to_spec = nnAudio.features.MelSpectrogram(
 
 post_norm = NormalizeBatch()
 AVAILABLE_AUGMENTATIONS = [
-    "AddGaussianNoise",
-    # "TimeStretch",
+    # "AddGaussianNoise",
+    "TimeStretch",
     "PitchShift",
     # # "Shift",
     "HighPassFilter",
