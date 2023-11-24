@@ -34,7 +34,8 @@ parser.add_argument("--base_lr", type=float, default=0.06)
 parser.add_argument("--resume", type=bool, default=False)
 parser.add_argument("--run_name", type=str, default="run")
 parser.add_argument("--prenormalize", type=bool, default=False)
-parser.add_argument("--postnormalize", type=bool, default=True)
+parser.add_argument("--postnormalize", type=bool, default=False)
+parser.add_argument("--log_interval", type=int, default=60)
 args = parser.parse_args()
 print(args)
 
@@ -138,7 +139,10 @@ def train(
     to_spec.to("cuda")
     for i, (wav1, wav2) in enumerate(train_loader):
         adjust_learning_rate(optimizer, epoch, base_lr, i, iteration_per_epoch)
-        wandb.log({"lr": optimizer.param_groups[0]["lr"]})
+        wandb.log(
+            {"lr": optimizer.param_groups[0]["lr"]},
+            step=(epoch * iteration_per_epoch + (i + 1)),
+        )
         data_time.update(time.time() - end)
 
         wav1 = wav1.cuda(non_blocking=True)
@@ -157,7 +161,7 @@ def train(
 
         # compute output
         loss = model(img1, img2)
-        wandb.log({"loss": loss.item()})
+        wandb.log({"loss": loss.item()}, step=(epoch * iteration_per_epoch + (i + 1)))
 
         # acc1/acc5 are (K+1)-way contrast classifier accuracy
         # measure accuracy and record loss
@@ -172,8 +176,17 @@ def train(
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % iteration_per_epoch == 0:
+        if i % args.log_interval == 0:
             progress.display(i)
+            wandb.log(
+                {
+                    "wav_strong_aug": wandb.Audio(wav1[0].cpu(), sample_rate=16000),
+                    "wav_weak_aug": wandb.Audio(wav2[0].cpu(), sample_rate=16000),
+                    "img_strong_aug": wandb.Image(img1),
+                    "img_weak_aug": wandb.Image(img2),
+                },
+                step=(epoch * iteration_per_epoch + (i + 1)),
+            )
 
 
 def seed_everything(seed=42):

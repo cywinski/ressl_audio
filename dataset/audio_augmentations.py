@@ -55,14 +55,14 @@ class PrecomputedNorm(nn.Module):
 def get_contrastive_augment():
     return audiomentations.Compose(
         [
-            audiomentations.PolarityInversion(),
+            # audiomentations.PolarityInversion(),
             audiomentations.HighPassFilter(),
             audiomentations.LowPassFilter(),
             audiomentations.AddGaussianNoise(),
             audiomentations.TimeStretch(),
             audiomentations.PitchShift(),
             audiomentations.Shift(),
-            audiomentations.Normalize(),
+            # audiomentations.Normalize(),
         ]
     )
 
@@ -73,7 +73,7 @@ def get_weak_augment():
             # audiomentations.PolarityInversion(),
             audiomentations.AddGaussianNoise(),
             # audiomentations.PitchShift(),
-            audiomentations.Normalize(),
+            # audiomentations.Normalize(),
         ]
     )
 
