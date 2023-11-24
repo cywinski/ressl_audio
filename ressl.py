@@ -17,7 +17,7 @@ from dataset.audio_augmentations import (
     get_contrastive_augment,
     get_weak_augment,
     PrecomputedNorm,
-    NormalizeBatch
+    NormalizeBatch,
 )
 import nnAudio.features
 
@@ -71,6 +71,7 @@ to_spec = nnAudio.features.MelSpectrogram(
 )
 
 post_norm = NormalizeBatch()
+
 
 def _calculate_stats(device, data_loader, max_samples):
     running_stats = RunningStats()
@@ -171,7 +172,8 @@ def train(
         batch_time.update(time.time() - end)
         end = time.time()
 
-        progress.display(i)
+        if i % iteration_per_epoch == 0:
+            progress.display(i)
 
 
 def seed_everything(seed=42):
@@ -234,7 +236,7 @@ def main():
     train_loader = DataLoader(
         dataset,
         shuffle=True,
-        num_workers=0, # TODO: Try to fix this
+        num_workers=0,
         pin_memory=False,
         batch_size=args.batch_size,
         drop_last=True,

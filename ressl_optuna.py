@@ -248,6 +248,7 @@ def objective(trial):
         "augmentations",
         aug_combinations,
     )
+    wandb.log({"strong_augmentations": strong_augmentations})
     # weak_augmentations = trial.suggest_categorical(
     #     "augmentations",
     #     aug_combinations,

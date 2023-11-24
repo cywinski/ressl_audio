@@ -72,7 +72,7 @@ def get_weak_augment():
         [
             # audiomentations.PolarityInversion(),
             audiomentations.AddGaussianNoise(),
-            audiomentations.PitchShift(),
+            # audiomentations.PitchShift(),
             audiomentations.Normalize(),
         ]
     )
