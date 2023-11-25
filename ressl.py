@@ -286,14 +286,15 @@ def main():
             args.base_lr,
             pre_norm,
         )
-        torch.save(
-            {
-                "model": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "epoch": epoch + 1,
-            },
-            os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epoch)),
-        )
+        if epoch % args.save_interval == 0:
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch": epoch + 1,
+                },
+                os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epoch)),
+            )
 
 
 if __name__ == "__main__":

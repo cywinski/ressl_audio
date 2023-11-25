@@ -79,7 +79,7 @@ def get_weak_augment():
 
 
 def get_augment_by_class_names(aug_classes_list):
-    aug_list = [audiomentations.AddGaussianNoise()] + [
+    aug_list = [
         getattr(audiomentations, aug_class)() for aug_class in eval(aug_classes_list)
-    ] + [audiomentations.Normalize()]
+    ]
     return audiomentations.Compose(aug_list)
