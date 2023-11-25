@@ -10,6 +10,8 @@ import logging
 from network.base_model import *
 from evar.common import torch
 from network.audio_model import AudioNTT2022Encoder
+import audiomentations
+from dataset.audio_augmentations import NormalizeBatch
 
 
 class AR_RESSL(BaseAudioRepr):
@@ -17,6 +19,8 @@ class AR_RESSL(BaseAudioRepr):
         super().__init__(cfg=cfg)
         self.to_feature = ToLogMelSpec(cfg)
         self.body = AudioNTT2022Encoder(n_mels=64)
+        self.normalize_wav = audiomentations.Normalize()
+        self.post_norm = NormalizeBatch()
 
         prefix = "net."
         if cfg.weight_file is not None:
@@ -35,8 +39,8 @@ class AR_RESSL(BaseAudioRepr):
 
     def encode_frames(self, batch_audio):
         x = self.to_feature(batch_audio)
-        # x = normalize_spectrogram(self.norm_stats, x)  # B,F,T
         x = x.unsqueeze(1)  # -> B,1,F,T
+        # x = self.post_norm(x)
         x = self.body(x)  # -> B,T,D=C*F
         x = x.transpose(1, 2)  # -> B,D,T
         return x

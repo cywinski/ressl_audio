@@ -20,6 +20,7 @@ from dataset.audio_augmentations import (
     NormalizeBatch,
 )
 import nnAudio.features
+import glob
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--audio_dir", type=str, default="data/audioset/all/")
@@ -36,6 +37,7 @@ parser.add_argument("--run_name", type=str, default="run")
 parser.add_argument("--prenormalize", type=bool, default=False)
 parser.add_argument("--postnormalize", type=bool, default=False)
 parser.add_argument("--log_interval", type=int, default=60)
+parser.add_argument("--save_interval", type=int, default=10)
 args = parser.parse_args()
 print(args)
 
@@ -257,11 +259,13 @@ def main():
     )
     iteration_per_epoch = train_loader.__len__()
 
-    checkpoint_path = "checkpoints/ressl-{}-epochs-{}-bs-{}-{}.pth".format(
+    checkpoint_dir = "checkpoints/ressl-{}-epochs-{}-bs-{}-{}/".format(
         args.dataset, args.epochs, args.batch_size, args.run_name
     )
-    print("checkpoint_path:", checkpoint_path)
-    if os.path.exists(checkpoint_path) and args.resume:
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    print("checkpoint_dir:", checkpoint_dir)
+    if os.path.exists(checkpoint_dir) and args.resume:
+        checkpoint_path = sorted(glob.glob(checkpoint_dir, "*.pth"))[-1]
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
@@ -269,7 +273,7 @@ def main():
         print(checkpoint_path, "found, start from epoch", start_epoch)
     else:
         start_epoch = 0
-        print(checkpoint_path, "not found, start from epoch 0")
+        print("start from epoch 0")
 
     model.train()
     for epoch in range(start_epoch, epochs):
@@ -288,7 +292,7 @@ def main():
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch + 1,
             },
-            checkpoint_path,
+            os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epoch)),
         )
 
 

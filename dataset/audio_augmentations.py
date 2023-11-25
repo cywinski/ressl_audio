@@ -61,7 +61,7 @@ def get_contrastive_augment():
             audiomentations.AddGaussianNoise(),
             audiomentations.TimeStretch(),
             audiomentations.PitchShift(),
-            audiomentations.Shift(),
+            # audiomentations.Shift(),
             # audiomentations.Normalize(),
         ]
     )
