@@ -176,7 +176,7 @@ def train(
 
         # compute output
         loss = model(img1, img2)
-        wandb.log({"loss": loss.item()}, step=(epoch * iteration_per_epoch + (i + 1)))
+        wandb.log({"loss": loss.item()})
 
         # acc1/acc5 are (K+1)-way contrast classifier accuracy
         # measure accuracy and record loss
@@ -199,8 +199,7 @@ def train(
                     "wav_weak_aug": wandb.Audio(wav2[0].cpu(), sample_rate=16000),
                     "img_strong_aug": wandb.Image(img1),
                     "img_weak_aug": wandb.Image(img2),
-                },
-                step=(epoch * iteration_per_epoch + (i + 1)),
+                }
             )
 
     return loss.item()
