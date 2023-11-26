@@ -7,11 +7,13 @@ import torch.nn.functional as F
 
 
 class ReSSL(nn.Module):
-    def __init__(self, dim=128, K=4096, m=0.99, bn_splits=8):
+    def __init__(self, dim=128, K=4096, m=0.99, bn_splits=8, tau_s=0.1, tau_t=0.04):
         super(ReSSL, self).__init__()
 
         self.K = K
         self.m = m
+        self.tau_s = tau_s
+        self.tau_t = tau_t
 
         # create the encoders
         # self.net       = ModelBaseMoCo(bn_splits=bn_splits)
@@ -111,8 +113,8 @@ class ReSSL(nn.Module):
         logits_q = torch.einsum("nc,ck->nk", [q, self.queue.clone().detach()])
         logits_k = torch.einsum("nc,ck->nk", [k, self.queue.clone().detach()])
         loss = -torch.sum(
-            F.softmax(logits_k.detach() / 0.04, dim=1)
-            * F.log_softmax(logits_q / 0.1, dim=1),
+            F.softmax(logits_k.detach() / self.tau_t, dim=1)
+            * F.log_softmax(logits_q / self.tau_s, dim=1),
             dim=1,
         ).mean()  # NOTE: Temperatures hardcoded
         self._dequeue_and_enqueue(k)

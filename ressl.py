@@ -38,6 +38,8 @@ parser.add_argument("--prenormalize", type=bool, default=False)
 parser.add_argument("--postnormalize", type=bool, default=False)
 parser.add_argument("--log_interval", type=int, default=60)
 parser.add_argument("--save_interval", type=int, default=10)
+parser.add_argument("--tau_s", type=float, default=0.1)
+parser.add_argument("--tau_t", type=float, default=0.04)
 args = parser.parse_args()
 print(args)
 
@@ -207,7 +209,7 @@ def main():
     wandb.init(project="ressl-audio", config=args, name=args.run_name)
     generator = seed_everything()
 
-    model = ReSSL(K=args.k, m=args.m)
+    model = ReSSL(K=args.k, m=args.m, tau_s=args.tau_s, tau_t=args.tau_t)
     model = model.cuda()
     print(model)
 
@@ -286,7 +288,7 @@ def main():
             args.base_lr,
             pre_norm,
         )
-        if epoch % args.save_interval == 0:
+        if (epoch + 1) % args.save_interval == 0:
             torch.save(
                 {
                     "model": model.state_dict(),

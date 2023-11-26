@@ -56,11 +56,11 @@ def get_contrastive_augment():
     return audiomentations.Compose(
         [
             # audiomentations.PolarityInversion(),
-            audiomentations.HighPassFilter(),
-            audiomentations.LowPassFilter(),
             audiomentations.AddGaussianNoise(),
             audiomentations.TimeStretch(),
             audiomentations.PitchShift(),
+            audiomentations.HighPassFilter(),
+            audiomentations.LowPassFilter(),
             # audiomentations.Shift(),
             # audiomentations.Normalize(),
         ]
