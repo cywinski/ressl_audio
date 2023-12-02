@@ -12,7 +12,8 @@ import random
 import numpy as np
 from pathlib import Path
 from dataset.audio_data import WavDatasetPair
-from evar.evar.utils.calculations import RunningStats
+
+# from evar.evar.utils.calculations import RunningStats
 from dataset.audio_augmentations import (
     get_contrastive_augment,
     get_weak_augment,
@@ -32,17 +33,16 @@ parser.add_argument("--port", type=int, default=23456)
 parser.add_argument("--k", type=int, default=4096)
 parser.add_argument("--m", type=float, default=0.99)
 parser.add_argument("--weak", default=False, action="store_true")
-parser.add_argument("--epochs", type=int, default=800)
-parser.add_argument("--batch_size", type=int, default=256)
+parser.add_argument("--epochs", type=int, default=100)
+parser.add_argument("--batch_size", type=int, default=128)
 parser.add_argument("--base_lr", type=float, default=0.06)
 parser.add_argument("--resume", type=bool, default=False)
 parser.add_argument("--run_name", type=str, default="run")
 parser.add_argument("--prenormalize", type=bool, default=False)
-parser.add_argument("--postnormalize", type=bool, default=True)
+parser.add_argument("--postnormalize", type=bool, default=False)
 parser.add_argument("--log_interval", type=int, default=60)
-parser.add_argument("--save_interval", type=int, default=10)
+parser.add_argument("--save_interval", type=int, default=50)
 args = parser.parse_args()
-print(args)
 
 epochs = args.epochs
 warm_up = 5
@@ -79,7 +79,7 @@ to_spec = nnAudio.features.MelSpectrogram(
 post_norm = NormalizeBatch()
 AVAILABLE_AUGMENTATIONS = [
     "AddGaussianNoise",
-    "TimeStretch",
+    # "TimeStretch",
     "PitchShift",
     # # "Shift",
     "HighPassFilter",
@@ -90,27 +90,27 @@ aug_combinations = []
 for r in range(1, len(AVAILABLE_AUGMENTATIONS) + 1):
     for combination in itertools.combinations(AVAILABLE_AUGMENTATIONS, r):
         aug_combinations.append(str(combination))
+aug_combinations = aug_combinations + [""]
+
+# def _calculate_stats(device, data_loader, max_samples):
+#     running_stats = RunningStats()
+#     sample_count = 0
+#     to_spec.to(device)
+#     for batch_audios in data_loader:
+#         for batch_audio in batch_audios:
+#             with torch.no_grad():
+#                 converteds = to_spec(batch_audio.to(device)).detach().cpu()
+#             running_stats.put(converteds)
+#         sample_count += 2 * len(batch_audio)
+#         if sample_count >= max_samples:
+#             break
+#     return torch.tensor(running_stats())
 
 
-def _calculate_stats(device, data_loader, max_samples):
-    running_stats = RunningStats()
-    sample_count = 0
-    to_spec.to(device)
-    for batch_audios in data_loader:
-        for batch_audio in batch_audios:
-            with torch.no_grad():
-                converteds = to_spec(batch_audio.to(device)).detach().cpu()
-            running_stats.put(converteds)
-        sample_count += 2 * len(batch_audio)
-        if sample_count >= max_samples:
-            break
-    return torch.tensor(running_stats())
-
-
-def calc_norm_stats(data_loader, n_stats=100000, device="cuda"):
-    norm_stats = _calculate_stats(device, data_loader, max_samples=n_stats)
-    print(f" using spectrogram norimalization stats: {norm_stats.numpy()}")
-    return norm_stats
+# def calc_norm_stats(data_loader, n_stats=100000, device="cuda"):
+#     norm_stats = _calculate_stats(device, data_loader, max_samples=n_stats)
+#     print(f" using spectrogram norimalization stats: {norm_stats.numpy()}")
+#     return norm_stats
 
 
 # def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
@@ -191,7 +191,7 @@ def train(
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.log_interval == 0:
+        if i == 0:
             progress.display(i)
             wandb.log(
                 {
@@ -245,8 +245,9 @@ else:
 
 
 def objective(trial):
+    lr = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
+    args.base_lr = lr
     run = wandb.init(project="ressl-audio", config=args, group=args.run_name)
-
     model = ReSSL(K=args.k, m=args.m)
     model = model.cuda()
     print(model)
@@ -255,16 +256,11 @@ def objective(trial):
         model.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=5e-4
     )
 
-    strong_augmentations = trial.suggest_categorical(
-        "augmentations",
-        aug_combinations,
-    )
-    wandb.log({"strong_augmentations": strong_augmentations})
-    weak_augmentations = trial.suggest_categorical(
-        "augmentations",
-        aug_combinations,
-    )
-    wandb.log({"weak_augmentations": weak_augmentations})
+    # weak_augmentations = trial.suggest_categorical(
+    #     "augmentations",
+    #     aug_combinations,
+    # )
+    # wandb.log({"weak_augmentations": weak_augmentations})
 
     dataset = WavDatasetPair(
         sample_rate=16000,
@@ -272,6 +268,7 @@ def objective(trial):
         labels=None,
         random_crop=True,
         contrastive_aug=get_contrastive_augment(),
+        # weak_aug=get_augment_by_class_names(weak_augmentations),
         weak_aug=get_weak_augment(),
     )
     train_loader = DataLoader(
@@ -321,16 +318,26 @@ def objective(trial):
                 },
                 os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epoch)),
             )
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "epoch": epochs,
+        },
+        os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epochs)),
+    )
     wandb.finish()
     return loss_val
 
 
 if __name__ == "__main__":
-    search_space = {"augmentations": aug_combinations}
-    study = optuna.create_study(
-        direction="minimize", sampler=optuna.samplers.GridSampler(search_space)
-    )
-    study.optimize(objective, n_trials=len(aug_combinations))
+    # search_space = {"augmentations": aug_combinations}
+    # study = optuna.create_study(
+    #     direction="minimize", sampler=optuna.samplers.GridSampler(search_space)
+    # )
+    # study.optimize(objective, n_trials=len(aug_combinations))
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=10)
 
     print("Study statistics: ")
     print("  Number of finished trials: ", len(study.trials))

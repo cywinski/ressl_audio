@@ -12,7 +12,7 @@ import random
 import numpy as np
 from pathlib import Path
 from dataset.audio_data import WavDatasetPair
-from evar.evar.utils.calculations import RunningStats
+# from evar.evar.utils.calculations import RunningStats
 from dataset.audio_augmentations import (
     get_contrastive_augment,
     get_weak_augment,
@@ -30,7 +30,7 @@ parser.add_argument("--k", type=int, default=4096)
 parser.add_argument("--m", type=float, default=0.99)
 parser.add_argument("--weak", default=False, action="store_true")
 parser.add_argument("--epochs", type=int, default=800)
-parser.add_argument("--batch_size", type=int, default=256)
+parser.add_argument("--batch_size", type=int, default=128)
 parser.add_argument("--base_lr", type=float, default=0.06)
 parser.add_argument("--resume", type=bool, default=False)
 parser.add_argument("--run_name", type=str, default="run")
@@ -78,25 +78,25 @@ to_spec = nnAudio.features.MelSpectrogram(
 post_norm = NormalizeBatch()
 
 
-def _calculate_stats(device, data_loader, max_samples):
-    running_stats = RunningStats()
-    sample_count = 0
-    to_spec.to(device)
-    for batch_audios in data_loader:
-        for batch_audio in batch_audios:
-            with torch.no_grad():
-                converteds = to_spec(batch_audio.to(device)).detach().cpu()
-            running_stats.put(converteds)
-        sample_count += 2 * len(batch_audio)
-        if sample_count >= max_samples:
-            break
-    return torch.tensor(running_stats())
+# def _calculate_stats(device, data_loader, max_samples):
+#     running_stats = RunningStats()
+#     sample_count = 0
+#     to_spec.to(device)
+#     for batch_audios in data_loader:
+#         for batch_audio in batch_audios:
+#             with torch.no_grad():
+#                 converteds = to_spec(batch_audio.to(device)).detach().cpu()
+#             running_stats.put(converteds)
+#         sample_count += 2 * len(batch_audio)
+#         if sample_count >= max_samples:
+#             break
+#     return torch.tensor(running_stats())
 
 
-def calc_norm_stats(data_loader, n_stats=100000, device="cuda"):
-    norm_stats = _calculate_stats(device, data_loader, max_samples=n_stats)
-    print(f" using spectrogram norimalization stats: {norm_stats.numpy()}")
-    return norm_stats
+# def calc_norm_stats(data_loader, n_stats=100000, device="cuda"):
+#     norm_stats = _calculate_stats(device, data_loader, max_samples=n_stats)
+#     print(f" using spectrogram norimalization stats: {norm_stats.numpy()}")
+#     return norm_stats
 
 
 # def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
