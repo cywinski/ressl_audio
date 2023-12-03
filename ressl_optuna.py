@@ -35,7 +35,7 @@ parser.add_argument("--m", type=float, default=0.99)
 parser.add_argument("--weak", default=False, action="store_true")
 parser.add_argument("--epochs", type=int, default=100)
 parser.add_argument("--batch_size", type=int, default=128)
-parser.add_argument("--base_lr", type=float, default=0.06)
+parser.add_argument("--base_lr", type=float, default=0.001)
 parser.add_argument("--resume", type=bool, default=False)
 parser.add_argument("--run_name", type=str, default="run")
 parser.add_argument("--prenormalize", type=bool, default=False)
@@ -282,8 +282,8 @@ def objective(trial):
     )
     iteration_per_epoch = train_loader.__len__()
 
-    checkpoint_dir = "checkpoints/ressl-{}-epochs-{}-bs-{}-{}/".format(
-        args.dataset, args.epochs, args.batch_size, args.run_name
+    checkpoint_dir = "checkpoints/ressl-{}/".format(
+        run.name
     )
     os.makedirs(checkpoint_dir, exist_ok=True)
     print("checkpoint_dir:", checkpoint_dir)
@@ -331,13 +331,11 @@ def objective(trial):
 
 
 if __name__ == "__main__":
-    # search_space = {"augmentations": aug_combinations}
-    # study = optuna.create_study(
-    #     direction="minimize", sampler=optuna.samplers.GridSampler(search_space)
-    # )
-    # study.optimize(objective, n_trials=len(aug_combinations))
-    study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=10)
+    search_space = {"augmentations": aug_combinations}
+    study = optuna.create_study(
+        direction="minimize", sampler=optuna.samplers.GridSampler(search_space)
+    )
+    study.optimize(objective, n_trials=len(aug_combinations))
 
     print("Study statistics: ")
     print("  Number of finished trials: ", len(study.trials))
