@@ -245,8 +245,8 @@ else:
 
 
 def objective(trial):
-    lr = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
-    args.base_lr = lr
+    # lr = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
+    # args.base_lr = lr
     run = wandb.init(project="ressl-audio", config=args, group=args.run_name)
     model = ReSSL(K=args.k, m=args.m)
     model = model.cuda()
@@ -256,11 +256,11 @@ def objective(trial):
         model.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=5e-4
     )
 
-    # weak_augmentations = trial.suggest_categorical(
-    #     "augmentations",
-    #     aug_combinations,
-    # )
-    # wandb.log({"weak_augmentations": weak_augmentations})
+    weak_augmentations = trial.suggest_categorical(
+        "augmentations",
+        aug_combinations,
+    )
+    wandb.log({"weak_augmentations": weak_augmentations})
 
     dataset = WavDatasetPair(
         sample_rate=16000,
@@ -268,8 +268,8 @@ def objective(trial):
         labels=None,
         random_crop=True,
         contrastive_aug=get_contrastive_augment(),
-        # weak_aug=get_augment_by_class_names(weak_augmentations),
-        weak_aug=get_weak_augment(),
+        weak_aug=get_augment_by_class_names(weak_augmentations),
+        # weak_aug=get_weak_augment(),
     )
     train_loader = DataLoader(
         dataset,
