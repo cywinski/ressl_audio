@@ -12,6 +12,7 @@ import random
 import numpy as np
 from pathlib import Path
 from dataset.audio_data import WavDatasetPair
+
 # from evar.evar.utils.calculations import RunningStats
 from dataset.audio_augmentations import (
     get_contrastive_augment,
@@ -23,7 +24,7 @@ import nnAudio.features
 import glob
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--audio_dir", type=str, default="data/audioset/all/")
+parser.add_argument("--audio_dir", type=str, default="data/train_wav_16k/")
 parser.add_argument("--dataset", type=str, default="audioset")
 parser.add_argument("--port", type=int, default=23456)
 parser.add_argument("--k", type=int, default=4096)
@@ -145,7 +146,6 @@ def train(
         adjust_learning_rate(optimizer, epoch, base_lr, i, iteration_per_epoch)
         wandb.log(
             {"lr": optimizer.param_groups[0]["lr"]},
-            step=(epoch * iteration_per_epoch + (i + 1)),
         )
         data_time.update(time.time() - end)
 
@@ -165,7 +165,7 @@ def train(
 
         # compute output
         loss = model(img1, img2)
-        wandb.log({"loss": loss.item()}, step=(epoch * iteration_per_epoch + (i + 1)))
+        wandb.log({"loss": loss.item()})
 
         # acc1/acc5 are (K+1)-way contrast classifier accuracy
         # measure accuracy and record loss
@@ -180,7 +180,7 @@ def train(
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.log_interval == 0:
+        if i == 0:
             progress.display(i)
             wandb.log(
                 {
@@ -189,7 +189,6 @@ def train(
                     "img_strong_aug": wandb.Image(img1),
                     "img_weak_aug": wandb.Image(img2),
                 },
-                step=(epoch * iteration_per_epoch + (i + 1)),
             )
 
 
@@ -248,7 +247,7 @@ def main():
         labels=None,
         random_crop=True,
         contrastive_aug=get_contrastive_augment(),
-        weak_aug=get_weak_augment(),
+        weak_aug=None,
     )
     train_loader = DataLoader(
         dataset,
@@ -296,6 +295,15 @@ def main():
                     "epoch": epoch + 1,
                 },
                 os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epoch)),
+            )
+
+    torch.save(
+                {
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch": epochs,
+                },
+                os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epochs)),
             )
 
 

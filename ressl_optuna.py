@@ -27,7 +27,7 @@ import itertools
 import glob
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--audio_dir", type=str, default="data/audioset/all/")
+parser.add_argument("--audio_dir", type=str, default="data/train_wav_16k/")
 parser.add_argument("--dataset", type=str, default="audioset")
 parser.add_argument("--port", type=int, default=23456)
 parser.add_argument("--k", type=int, default=4096)
@@ -42,6 +42,8 @@ parser.add_argument("--prenormalize", type=bool, default=False)
 parser.add_argument("--postnormalize", type=bool, default=False)
 parser.add_argument("--log_interval", type=int, default=60)
 parser.add_argument("--save_interval", type=int, default=50)
+parser.add_argument("--tau_s", type=float, default=0.1)
+parser.add_argument("--tau_t", type=float, default=0.04)
 args = parser.parse_args()
 
 epochs = args.epochs
@@ -91,7 +93,17 @@ for r in range(1, len(AVAILABLE_AUGMENTATIONS) + 1):
     for combination in itertools.combinations(AVAILABLE_AUGMENTATIONS, r):
         aug_combinations.append(str(combination))
 aug_combinations = aug_combinations + [""]
-
+# for a in [
+#     ("AddGaussianNoise", "PitchShift"),
+#     ("AddGaussianNoise", "LowPassFilter"),
+#     ("LowPassFilter",),
+#     ("AddGaussianNoise", "HighPassFilter"),
+#     ("AddGaussianNoise", "PitchShift", "HighPassFilter"),
+#     ("PitchShift", "HighPassFilter", "LowPassFilter"),
+#     ("PitchShift", "HighPassFilter"),
+# ]:
+#     aug_combinations.remove(str(a))
+print(aug_combinations)
 # def _calculate_stats(device, data_loader, max_samples):
 #     running_stats = RunningStats()
 #     sample_count = 0
@@ -282,9 +294,7 @@ def objective(trial):
     )
     iteration_per_epoch = train_loader.__len__()
 
-    checkpoint_dir = "checkpoints/ressl-{}/".format(
-        run.name
-    )
+    checkpoint_dir = "checkpoints/ressl-{}/".format(run.name)
     os.makedirs(checkpoint_dir, exist_ok=True)
     print("checkpoint_dir:", checkpoint_dir)
     if os.path.exists(checkpoint_dir) and args.resume:

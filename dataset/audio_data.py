@@ -45,7 +45,7 @@ class BaseRawAudioDataset(torch.utils.data.Dataset):
             if self.weak_aug is not None:
                 pos_2 = self.weak_aug(wav, sample_rate=self.sample_rate)
             else:
-                pos_2 = self.contrastive_aug(wav, sample_rate=self.sample_rate)
+                pos_2 = wav
 
             pos_1 = torch.from_numpy(pos_1).float()
             pos_2 = torch.from_numpy(pos_2).float()
