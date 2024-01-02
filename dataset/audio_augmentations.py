@@ -70,8 +70,9 @@ def get_contrastive_augment():
 def get_weak_augment():
     return audiomentations.Compose(
         [
+            audiomentations.LowPassFilter(),
             # audiomentations.PolarityInversion(),
-            audiomentations.AddGaussianNoise(),
+            # audiomentations.AddGaussianNoise(),
             # audiomentations.PitchShift(),
             # audiomentations.Normalize(),
         ]

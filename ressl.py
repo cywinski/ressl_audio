@@ -247,7 +247,7 @@ def main():
         labels=None,
         random_crop=True,
         contrastive_aug=get_contrastive_augment(),
-        weak_aug=None,
+        weak_aug=get_weak_augment(),
     )
     train_loader = DataLoader(
         dataset,
@@ -294,7 +294,7 @@ def main():
                     "optimizer": optimizer.state_dict(),
                     "epoch": epoch + 1,
                 },
-                os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epoch)),
+                os.path.join(checkpoint_dir, "checkpoint-{}.pth".format(epoch + 1)),
             )
 
     torch.save(
