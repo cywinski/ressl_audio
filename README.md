@@ -1,19 +1,44 @@
-# ReSSL
+# ReSSL-A
+Adaptation of ReSSL method to audio.
 
-## How to run
-Train model in SSL manner
+## How to install
+1. Clone repository
 ```bash
-python ressl.py
+git clone https://github.com/cywinski/ressl_audio.git
+cd ressl_audio
 ```
-After training the final checkpoint is saved in `checkpoints/ressl-{dataset}.pth`.
+2. Prepare Conda environment
+```bash
+conda create -n ressl_env python=3.9
+conda activate ressl_env
+pip install -r requirements.txt
+```
 
-## How to validate
+## How to train
+### Prepare train dataset
+Download the subset of AudioSet from [Kaggle](https://www.kaggle.com/datasets/zfturbo/audioset/data).
 
-Linear head training and validation of trained checkpoint.
+### Log to WandB
+```bash
+wandb login
 ```
-python linear_eval.py --checkpoint ressl-{dataset}.pth
+
+### Run training
+
+To run single training run:
+```bash
+python ressl.py --audio_dir <path/to/train>
 ```
-## Evaluating on downstream tasks using EVAR
+
+To run Optuna hyperparam search run:
+```bash
+python ressl_optuna.py --audio_dir <path/to/train>
+```
+
+The training checkpoints are saved under `checkpoints` directory.
+
+
+## How to evaluate on downstream tasks using EVAR
 Run following to clone your copy
 ```
 echo "Setup EVAR (nttcslab/eval-audio-repr)."
@@ -34,6 +59,7 @@ ln -s ../../to_evar/ressl.yaml config
 2. Prepare dataset and metadata
 3. Prepare `evar/config/ressl.yaml`
 
+To run validation:
 ```bash
 cd evar
 python lineareval.py config/ressl.yaml <dataset_name>
