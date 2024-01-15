@@ -116,6 +116,6 @@ class ReSSL(nn.Module):
             F.softmax(logits_k.detach() / self.tau_t, dim=1)
             * F.log_softmax(logits_q / self.tau_s, dim=1),
             dim=1,
-        ).mean()  # NOTE: Temperatures hardcoded
+        ).mean()
         self._dequeue_and_enqueue(k)
         return loss

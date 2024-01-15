@@ -13,7 +13,6 @@ import numpy as np
 from pathlib import Path
 from dataset.audio_data import WavDatasetPair
 
-# from evar.evar.utils.calculations import RunningStats
 from dataset.audio_augmentations import (
     get_contrastive_augment,
     get_weak_augment,
@@ -79,46 +78,6 @@ to_spec = nnAudio.features.MelSpectrogram(
 post_norm = NormalizeBatch()
 
 
-# def _calculate_stats(device, data_loader, max_samples):
-#     running_stats = RunningStats()
-#     sample_count = 0
-#     to_spec.to(device)
-#     for batch_audios in data_loader:
-#         for batch_audio in batch_audios:
-#             with torch.no_grad():
-#                 converteds = to_spec(batch_audio.to(device)).detach().cpu()
-#             running_stats.put(converteds)
-#         sample_count += 2 * len(batch_audio)
-#         if sample_count >= max_samples:
-#             break
-#     return torch.tensor(running_stats())
-
-
-# def calc_norm_stats(data_loader, n_stats=100000, device="cuda"):
-#     norm_stats = _calculate_stats(device, data_loader, max_samples=n_stats)
-#     print(f" using spectrogram norimalization stats: {norm_stats.numpy()}")
-#     return norm_stats
-
-
-# def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
-#     # Calculate normalization statistics from the training dataset (spectrograms).
-#     n_stats = min(n_stats, len(data_loader.dataset))
-#     print(
-#         f"Calculating mean/std using random {n_stats} samples from population {len(data_loader.dataset)} samples..."
-#     )
-#     X = []
-#     for wavs in data_loader:
-#         for wav in wavs:
-#             lms_batch = (to_spec(wav) + torch.finfo().eps).log().unsqueeze(1)
-#             X.extend([x for x in lms_batch.detach().cpu().numpy()])
-#         if len(X) >= n_stats:
-#             break
-#     X = np.stack(X)
-#     norm_stats = np.array([X.mean(), X.std()])
-#     print(f"  ==> mean/std: {norm_stats}, {norm_stats.shape} <- {X.shape}")
-#     return norm_stats
-
-
 def train(
     train_loader,
     model,
@@ -159,9 +118,6 @@ def train(
         if args.postnormalize:
             img1 = post_norm(img1)
             img2 = post_norm(img2)
-
-        # img1 = img1.cuda(non_blocking=True)
-        # img2 = img2.cuda(non_blocking=True)
 
         # compute output
         loss = model(img1, img2)

@@ -93,55 +93,6 @@ for r in range(1, len(AVAILABLE_AUGMENTATIONS) + 1):
     for combination in itertools.combinations(AVAILABLE_AUGMENTATIONS, r):
         aug_combinations.append(str(combination))
 aug_combinations = aug_combinations + [""]
-# for a in [
-#     ("AddGaussianNoise", "PitchShift"),
-#     ("AddGaussianNoise", "LowPassFilter"),
-#     ("LowPassFilter",),
-#     ("AddGaussianNoise", "HighPassFilter"),
-#     ("AddGaussianNoise", "PitchShift", "HighPassFilter"),
-#     ("PitchShift", "HighPassFilter", "LowPassFilter"),
-#     ("PitchShift", "HighPassFilter"),
-# ]:
-#     aug_combinations.remove(str(a))
-print(aug_combinations)
-# def _calculate_stats(device, data_loader, max_samples):
-#     running_stats = RunningStats()
-#     sample_count = 0
-#     to_spec.to(device)
-#     for batch_audios in data_loader:
-#         for batch_audio in batch_audios:
-#             with torch.no_grad():
-#                 converteds = to_spec(batch_audio.to(device)).detach().cpu()
-#             running_stats.put(converteds)
-#         sample_count += 2 * len(batch_audio)
-#         if sample_count >= max_samples:
-#             break
-#     return torch.tensor(running_stats())
-
-
-# def calc_norm_stats(data_loader, n_stats=100000, device="cuda"):
-#     norm_stats = _calculate_stats(device, data_loader, max_samples=n_stats)
-#     print(f" using spectrogram norimalization stats: {norm_stats.numpy()}")
-#     return norm_stats
-
-
-# def calc_norm_stats(data_loader, n_stats=10000, device="cuda"):
-#     # Calculate normalization statistics from the training dataset (spectrograms).
-#     n_stats = min(n_stats, len(data_loader.dataset))
-#     print(
-#         f"Calculating mean/std using random {n_stats} samples from population {len(data_loader.dataset)} samples..."
-#     )
-#     X = []
-#     for wavs in data_loader:
-#         for wav in wavs:
-#             lms_batch = (to_spec(wav) + torch.finfo().eps).log().unsqueeze(1)
-#             X.extend([x for x in lms_batch.detach().cpu().numpy()])
-#         if len(X) >= n_stats:
-#             break
-#     X = np.stack(X)
-#     norm_stats = np.array([X.mean(), X.std()])
-#     print(f"  ==> mean/std: {norm_stats}, {norm_stats.shape} <- {X.shape}")
-#     return norm_stats
 
 
 def train(
@@ -182,9 +133,6 @@ def train(
         if args.postnormalize:
             img1 = post_norm(img1)
             img2 = post_norm(img2)
-
-        # img1 = img1.cuda(non_blocking=True)
-        # img2 = img2.cuda(non_blocking=True)
 
         # compute output
         loss = model(img1, img2)
@@ -257,8 +205,6 @@ else:
 
 
 def objective(trial):
-    tau_t = trial.suggest_float("tau_t", 0.01, 0.1, log=True)
-    args.tau_t = tau_t
     run = wandb.init(project="ressl-audio", config=args, group=args.run_name)
     model = ReSSL(K=args.k, m=args.m)
     model = model.cuda()
@@ -268,11 +214,11 @@ def objective(trial):
         model.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=5e-4
     )
 
-    # weak_augmentations = trial.suggest_categorical(
-    #     "augmentations",
-    #     aug_combinations,
-    # )
-    # wandb.log({"weak_augmentations": weak_augmentations})
+    weak_augmentations = trial.suggest_categorical(
+        "augmentations",
+        aug_combinations,
+    )
+    wandb.log({"weak_augmentations": weak_augmentations})
 
     dataset = WavDatasetPair(
         sample_rate=16000,
@@ -280,8 +226,8 @@ def objective(trial):
         labels=None,
         random_crop=True,
         contrastive_aug=get_contrastive_augment(),
-        # weak_aug=get_augment_by_class_names(weak_augmentations),
-        weak_aug=get_weak_augment(),
+        weak_aug=get_augment_by_class_names(weak_augmentations),
+        # weak_aug=get_weak_augment(),
     )
     train_loader = DataLoader(
         dataset,
@@ -341,10 +287,8 @@ def objective(trial):
 
 
 if __name__ == "__main__":
-    # search_space = {"augmentations": aug_combinations}
-    search_space = {"tau_t": np.arange(0.01, 0.1, 0.01)}
     study = optuna.create_study(
-        direction="minimize", sampler=optuna.samplers.GridSampler(search_space)
+        direction="minimize",
     )
     study.optimize(objective, n_trials=len(aug_combinations))
 
